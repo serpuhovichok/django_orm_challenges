@@ -11,7 +11,8 @@
 - реализовать у модели метод to_json, который будет преобразовывать объект ноутбука в json-сериализуемый словарь
 - по очереди реализовать каждую из вьюх в этом файле, проверяя правильность их работу в браузере
 """
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, JsonResponse, HttpResponseForbidden
+from challenges.models import Laptop
 
 
 def laptop_details_view(request: HttpRequest, laptop_id: int) -> HttpResponse:
@@ -19,7 +20,12 @@ def laptop_details_view(request: HttpRequest, laptop_id: int) -> HttpResponse:
     В этой вьюхе вам нужно вернуть json-описание ноутбука по его id.
     Если такого id нет, вернуть 404.
     """
-    pass
+    try:
+        laptop = Laptop.objects.get(id=laptop_id)
+        return JsonResponse(laptop.to_json())
+    except Laptop.DoesNotExist:
+        return HttpResponseNotFound()
+
 
 
 def laptop_in_stock_list_view(request: HttpRequest) -> HttpResponse:
@@ -27,7 +33,11 @@ def laptop_in_stock_list_view(request: HttpRequest) -> HttpResponse:
     В этой вьюхе вам нужно вернуть json-описание всех ноутбуков, которых на складе больше нуля.
     Отсортируйте ноутбуки по дате добавления, сначала самый новый.
     """
-    pass
+    laptops = Laptop.objects.filter(count_available__gte=0).order_by('-added_date')
+    result = []
+    for laptop in laptops:
+        result.append(laptop.to_json())
+    return JsonResponse(result, safe=False)
 
 
 def laptop_filter_view(request: HttpRequest) -> HttpResponse:
@@ -37,12 +47,26 @@ def laptop_filter_view(request: HttpRequest) -> HttpResponse:
     Если бренд не входит в список доступных у вас на сайте или если цена отрицательная, верните 403.
     Отсортируйте ноутбуки по цене, сначала самый дешевый.
     """
-    pass
-
+    brand = request.GET['brand']
+    min_price = int(request.GET['min_price'])
+    if brand not in [brand_name for brand_name, _ in Laptop.BRANDS]:
+        return HttpResponseForbidden()
+    if min_price < 0:
+        return HttpResponseForbidden()
+    laptops = Laptop.objects.filter(brand=brand).filter(price__gte=min_price).order_by('price')
+    result = []
+    for laptop in laptops:
+        result.append(laptop.to_json())
+    return JsonResponse(result, safe=False)
 
 def last_laptop_details_view(request: HttpRequest) -> HttpResponse:
     """
     В этой вьюхе вам нужно вернуть json-описание последнего созданного ноутбука.
     Если ноутбуков нет вообще, вернуть 404.
     """
-    pass
+    laptop = Laptop.objects.order_by('-added_date').first()
+    if not laptop:
+        return HttpResponseNotFound()
+    return JsonResponse(laptop.to_json())
+
+
